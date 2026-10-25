@@ -51,11 +51,11 @@
 
 - **规则**: **任何分发给他人的产物（安装包、压缩包、源码包、插件包）在交付或上传前，必须做一次全量个人信息扫描**，不能凭"我记得改过了"判断。
 - **必须扫的项**:
-  1. **API / 私钥**: `sk-`、`oc_sk_`、`AKIA`、`ghp_`、`gho_`、`xoxb-`、`Bearer `、`-----BEGIN`（私钥头）
+  1. **API / 私钥**: 各类云厂商 / 托管平台的 access key、个人访问令牌、OAuth 令牌、SSH 私钥文件头
   2. **作者本机绝对路径**: 开发目录名、盘符路径
   3. **用户名与主机名**: `C:\Users\<真实用户名>`、计算机名、域账号
-  4. **内网地址**: `192.168.`、`10.`、`172.16-31.`
-  5. **私钥文件**: `.pem`、`.key`、`.pfx`、`id_rsa`、`.env`
+  4. **内网地址**: 私网网段地址（三类私有地址段）
+  5. **私钥文件**: 证书与私钥文件（PEM / KEY / PFX / SSH 私钥 / 环境变量文件）
 - **扫描方法（不要只看源码，必须扫成品）**:
   1. 把**成品**解包到临时目录（安装包先拆外层，再拆内层 payload）
   2. **逐个文件**按 UTF-8 读出全部字节再匹配——不要只 `Select-String`（对二进制无效）
@@ -90,87 +90,6 @@
 - **基础偏好修改例外**: 仅当用户明确说明“添加/修改基础偏好设置”时，才修改 `__WLSTUDIO_WORKSPACE__\AGENTS.md`
 - **单次会话例外**: 明确限定为单次场景的要求（如“这是一次CTF比赛的实战模拟”“这次作业要”等）不写入任何偏好设置
 
-## WLstudio 模型服务自动启动偏好
-
-- **规则**: 用户期望电脑重启后 llama-launcher 和 watcher 自动启动，无需手动干预
-- **启动方式**: 通过 Windows 启动文件夹中的 VBS 脚本静默启动（0=vbHide，完全无窗口）
-- **启动文件**: `__WLSTUDIO_HOME__\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\wlstudio-models.vbs`
-- **服务异常**: 如 API 连不上，优先检查 launcher 状态 (`http://127.0.0.1:8099/status`)，其次检查 node 进程和 llama-server 进程
-
-## 图片阅读流程（强制执行）
-
-当用户发送图片时，必须按以下流程执行：
-
-### 流程
-1. **缓存图片**：通过 `read-binary` 插件将图片文件缓存到本地可读路径
-2. **判断模型是否支持视觉**：
-   - **支持图片的模型**（直接阅读）：ark-code-latest, doubao-seed-code, doubao-seed-2.0-code, doubao-seed-2.0-pro, doubao-seed-2.0-lite, kimi-k2.6, kimi-k2.7-code, **deepseek-flash**
-   - **不支持图片的模型**（需代理）：glm-5.2, deepseek-v4-pro, minimax-m2.7, minimax-m3, mimo-v2-pro, MiMo V2.5, Nemotron 3 Super
-   - **代理模型 = `deepseek-flash`**（2026-09-18 起接手，替代原 `doubao-seed-2.0-pro`；火山套餐不再续费）—— 它是"既能直接读图、又能给别的模型当代理"的角色。`deepseek-flash`（= DeepSeek-V4.1-Flash）原生多模态，已实测 API 直传 base64 图像可正确识别，且 models.dev 已标记 `attachment: true`，opencode 可直接收图；**已加入插件 `skipModels`，故当前模型为 `deepseek-flash` 时直接读图、不走代理**。旧名 `deepseek-v4-flash`、`deepseek-v4-flash-vision-exp` 已下线，请求被官方暂时路由到 V4.1-Flash，同样按"可读图"处理
-3. **阅读方式**：
-   - **支持视觉的模型**：缓存后直接用 `read` 工具读取图片文件
-   - **不支持视觉的模型**：缓存后调用视觉代理脚本转文字描述
-
-### 精细度选择（约定式指令）
-用户可通过以下方式选择图片读取精细度：
-- **默认**（无标注）：使用 `doubao-seed-2.0-lite`，速度快，适合快速识别图片内容
-- **`@精细`**：在消息中添加 `@精细`，使用 `doubao-seed-2.0-pro`，更详细准确
-- **`/vf`**：斜杠命令，发送 `@精细` 标记，下一条图片消息将使用精细模式
-- **`/vc`**：斜杠命令，发送 `@粗糙` 标记，下一条图片消息将使用默认粗糙模式
-
-### 精细度设定回复规则
-- 当用户发送 `@精细` 或 `精细` 时：回复"已设定为精细模式"，后续图片使用 pro 模型
-- 当用户发送 `@粗糙` 或 `粗糙` 时：回复"已设定为粗糙模式"，后续图片使用 lite 模型
-- **禁止**在设定回复中额外询问用户是否需要重新分析等，直接简洁回复即可
-
-### 执行步骤
-1. 根据用户消息中是否包含 `@精细` / `精细` 或 `@粗糙` / `粗糙` 决定使用哪个模型
-2. 将图片文件路径传给视觉代理脚本：
-   - 粗糙模式（默认）：`node "__WLSTUDIO_HOME__\.config\opencode\skills\image-vision-proxy\scripts\vision-proxy.cjs" --image "<图片路径>"`
-   - 精细模式：`node "__WLSTUDIO_HOME__\.config\opencode\skills\image-vision-proxy\scripts\vision-proxy.cjs" --image "<图片路径>" --model pro`
-3. 脚本会调用对应模型分析图片并返回文字描述
-4. 将描述以 `[图片描述(by <模型名>)]: ` 为前缀注入到回复上下文中
-5. 基于图片描述内容回答用户问题
-
-### 强制阅读规则
-- **规则**: 当用户消息中包含图片时，**必须先通过视觉代理阅读图片**，再根据图片内容和文字消息综合判断用户意图
-- **禁止**: 未经阅读图片就基于上下文猜测用户意图并执行操作
-- **原因**: 图片可能包含与当前对话上下文无关的新信息（如其他工具的聊天截图、新的需求截图等），仅凭上下文猜测极易误判
-- **例外**: 仅当图片明确是之前对话中已描述过的同一张图片（重复发送）时，可跳过阅读
-
-### 自定义提示词
-如需更精确的图片分析，可通过 `--prompt` 参数指定：
-```
-node "__WLSTUDIO_HOME__\.config\opencode\skills\image-vision-proxy\scripts\vision-proxy.cjs" --image "<图片路径>" --prompt "请详细描述这张图片中的代码内容"
-```
-
-## Electron应用启动规则（强制执行）
-
-- **规则**: 启动Electron应用前，**必须先杀掉该应用的所有现有进程**，再启动新实例
-- **命令**: `Get-Process -Name "electron" -ErrorAction SilentlyContinue | Stop-Process -Force` → 然后 `Start-Process`
-- **禁止**: 不允许在未杀旧进程的情况下直接 `Start-Process`，这会导致窗口越开越多
-- **适用**: 无量模拟、WLstudio 及所有基于Electron的开发调试项目
-
-## 应用测试启动规则（强制执行）
-
-- **规则**: 修改代码后需要测试时，**必须先杀旧进程再启动**，一条命令完成
-- **正确做法**: `Get-Process -Name "electron" -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Process ...`
-- **禁止**: 连续多次 `Start-Process` 启动同一应用（每次启动前必须先杀旧进程）
-- **禁止**: 不要在每次代码修改后自动启动测试——除非用户明确要求测试
-
-## 中文进程名杀进程规则（强制执行）
-
-- **背景**: PowerShell 在 GBK 控制台中读取中文进程名 (如"无量配网.exe") 会得到乱码，`-match "中文"` 或 `-match "����"` 都无法可靠匹配，常导致进程杀不死
-- **正确做法**: 通过 `Get-CimInstance Win32_Process` 配合 `CommandLine` 或 `ExecutablePath` 来匹配（这两个字段编码可靠），获取 PID 后用 `taskkill /F /T /PID <pid>` 杀掉整个进程树
-- **`/T` 参数关键**: Electron 应用通常有多个子进程（GPU、网络、渲染），`taskkill /F /T /PID <主进程PID>` 会一次性杀掉整棵树，否则子进程会被父进程不断派生
-- **示例（杀无量配网）**:
-  ```powershell
-  $pids = (Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like "*config-tool*" -or $_.ExecutablePath -like "*config-tool*" }).ProcessId
-  foreach ($p in $pids) { & taskkill /F /T /PID $p 2>&1 | Out-Null }
-  ```
-- **禁止**: 用 `Get-Process | Where-Object { $_.ProcessName -match "中文" }` 这类方式杀中文名进程（不可靠）
-- **禁止**: `Stop-Process` 单独使用对中文名 Electron 应用（杀不全子进程）
-
 ## 压缩后自动继续任务
 
 - **规则**: 每次调用 `compress` 工具压缩对话上下文后，必须立即检查是否有未完成的对话任务（如 `todowrite` 中的 `in_progress` 状态项、用户明确要求但尚未执行的操作等）
@@ -183,19 +102,6 @@ node "__WLSTUDIO_HOME__\.config\opencode\skills\image-vision-proxy\scripts\visio
 - **规则**: 通过浏览器桥接查看网页内容时，**一律通过读取页面源码/DOM（eval/exec）获取信息**，禁止使用截图
 - **例外**: 仅当用户明确要求截图，或页面内容本身是图片/验证码等无法通过文本获取的情况才使用截图
 - **原因**: 截图需要视觉代理转文字，效率低且可能丢失细节；DOM/源码提取精确高效
-
-## 浏览器桥接编程偏好（重要）
-
-- **规则**: 当任务涉及浏览器桥接（browser bridge）需要编写脚本或程序时，**必须优先检查是否已有之前编辑的相关文件可以复用或参考**，严禁每次都从零重新编写
-- **检查路径**: 优先查看以下目录中的现有脚本
-  - 智慧树/超星答题相关脚本
-  - `__WLSTUDIO_WORKSPACE__\CTF-Tools\` — CTF 工具集及浏览器桥接封装
-  - `__WLSTUDIO_WORKSPACE__\` 月份文件夹下的相关 Python/JS 文件
-- **复用原则**:
-  - 若已有功能相近的脚本，直接复用或在其基础上修改
-  - 若已有部分逻辑可用，提取复用而非重写
-  - 参考已有脚本的调用方式（如 `ctf_browser.py eval` 的传参、base64 编码处理、超时设置等）
-- **原因**: 避免重复造轮子，减少调试时间，保持代码风格一致性，防止因重新实现而引入新 bug（如引号转义、编码问题等）
 
 ## 网站链接偏好
 
@@ -228,53 +134,6 @@ node "__WLSTUDIO_HOME__\.config\opencode\skills\image-vision-proxy\scripts\visio
   - 建议使用特定工具提取内容（如 python-docx、unzip 等）
   - 询问用户是否需要尝试其他方式获取文件内容
 
-## 智慧树/超星在线答题
-
-### 核心架构
-- **浏览器桥接**: `python "__WLSTUDIO_WORKSPACE__\CTF-Tools\ctf_browser.py" serve` 持久运行，Firefox 扩展连接 ws://127.0.0.1:18765
-- **题目获取**: 智慧树 API `https://hiexam-server.zhihuishu.com/zhsathome/homeworkUserPaper/getDoQuestSingle?homeworkId=XX&questionId=XX`
-- **编码修复**: 中文通过 JS `new TextEncoder().encode(JSON.stringify(data))` → `btoa(bin)` 编码，Python 端 `base64.b64decode().decode('utf-8')` 解码
-- **PowerShell 限制**: 多行 JS 不能直接传给 ctf_browser.py eval，必须 base64 编码后用 `eval(atob('...'))` 包裹
-
-### 智慧树答题流程
-1. 获取 QID 列表: `document.querySelectorAll('li[questionid]')` 提取所有题目 ID
-2. 批量获取题目: 多线程请求 API（注意限流，5线程为宜；判断题 questionOptionList 为 null）
-3. AI 直接作答（思政/政治课题目准确率高）
-4. 填写答案:
-   - 选择/多选题: 点击 `li[questionid="XX"]` 卡片 → 等 0.6s → 点击 `.optionContent[索引]`
-   - 判断题: 点击卡片 → 点击 `.el-radio-group .el-radio[0=对, 1=错]`
-5. 脚本: `__WLSTUDIO_WORKSPACE__\quiz-auto-filler\zhihuishu_fill.py`（选择/多选）+ `zhihuishu_fill_judge.py`（判断）
-
-### 超星答题流程
-- UEditor 富文本编辑器: 写入 `iframe.contentDocument.body.innerHTML` + `textarea.value` + dispatch change/input 事件
-- 脚本: `__WLSTUDIO_WORKSPACE__\quiz-auto-filler\filler.py`
-
-### 搜题 API（备选）
-- 百度搜索: 从 Python urllib 调用会被反爬，从浏览器内 fetch 也会返回验证页
-- 必应搜索: 浏览器内 `fetch('https://cn.bing.com/search?q=...')` 可用，但短选项匹配率低
-- **推荐**: AI 直接作答（准确率最高）
-
-### 批量填写方式偏好
-
-- **规则**: 填写浏览器中的测试题时，**优先使用直接注入 JavaScript `<script>` 标签的方式**一次性完成所有填写，禁止编写 Python 脚本进行逐题遍历填写
-- **原因**: Python 脚本逐题调用桥接耗时大、容易与手动操作打架、调试困难；JS 注入一次执行效率高
-- **正确做法**: 将正确答案和填充逻辑打包为一个 IIFE，通过 `<script>` 标签注入页面执行，使用 `async/await` + `setTimeout` 控制导航时序
-- **答案格式**:
-  ```javascript
-  var answers = {
-    "single": {0:2, 1:1, ...},  // Q索引:选项索引
-    "multi": {15:[0,1,2], ...},  // Q索引:[选项索引数组]
-    "judge": {20:1, 21:1, ...},  // Q索引:0=对/1=错
-    "fill": {35:["key","val"]}   // Q索引:[输入值数组]
-  };
-  ```
-- **判断完成**: 在页面中插入隐藏元素（如 `<div id="_done">`），通过轮询该元素判断脚本是否执行完毕
-
-### 填写后验证（强制执行）
-- **规则**: 每次完成答案填写后，必须进行验证
-- **多选题/判断题**: 随机选择2-3道，通过浏览器桥接读取实际选中状态，确认填写无误（如检查 `document.querySelector('li[questionid="XX"] .optionContent.selected')` 或 `.el-radio.is-checked`）
-- **简答/填空**: 随机选择1-2道，读取编辑器内容确认中文无乱码
-
 ## 经验文件管理（强制执行，5 层标签体系）
 
 - **规则**: 在新领域完成重要任务、或在已有领域获得关键突破后，**必须**把经验写入经验库
@@ -298,26 +157,6 @@ node "__WLSTUDIO_HOME__\.config\opencode\skills\image-vision-proxy\scripts\visio
 
 - **位置**: `__WLSTUDIO_EXBAGS__\_state\TASK_STATE.md`（进度写这里，不要写进本文件）
 - **约定**: 顶部写 `STATUS: IN_PROGRESS` 或 `STATUS: WAITING_USER`；压缩上下文前更新，压缩后先读回
-
-## CTF 工具集
-
-- **位置**: `__WLSTUDIO_WORKSPACE__\CTF-Tools\`
-- **统一入口**: `python "__WLSTUDIO_WORKSPACE__\CTF-Tools\ctf.py" <tool> [args]`
-- **Skill**: `ctf-toolkit`（加载后可查看详细用法）
-- **可用工具**:
-  - `sqlmap` — SQL注入检测与利用（封装 sqlmap，自动 --batch）
-  - `crypto` — 加密/编码操作（base64/base32/hex/URL解码、Caesar/Vigenere/XOR解密、哈希识别与破解、频率分析、Bacon密码）
-  - `dirsearch` — Web目录扫描
-  - `curl` — HTTP请求与元数据提取
-  - `extract` — 从文本/文件中提取flag、URL、邮箱、base64候选
-  - `binary` — 二进制文件分析（类型、熵、字符串、flag搜索）
-  - `stegano` — 隐写检测（PNG chunk分析、JPEG marker、尾部数据）
-  - `pcap` — PCAP快速分析（flag、HTTP请求）
-  - `strings` — 字符串提取
-  - `entropy` — 文件熵计算
-  - `browser` — WL Browser Bridge，Firefox浏览器控制（需安装扩展，支持Cookie读写、页面导航、JS执行、截图等）
-- **输出格式**: 所有工具默认输出 JSON，便于解析
-- **浏览器扩展安装**: 将 `__WLSTUDIO_WORKSPACE__\CTF-Tools\ctf-browser-extension\` 目录加载到 Firefox（about:debugging → 此Firefox → 临时加载附加组件），然后运行 `python ctf.py browser ping` 验证连接
 
 ## 弹窗干扰规则（强制执行）
 

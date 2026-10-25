@@ -1,7 +1,12 @@
 # WLstudio · 无量工作台
 
+开发者的话：
+最近在刷视频的时候，常常了解到许多人在agent会话达到上下文上限的时候选择新开会话，让其读取上个会话来解决上下文爆满问题，而对于喜欢和deepseek聊天的用户来说，单纯的读取会话可能会导致用户原本与大肥鱼建立的交流习惯被覆盖。通常情况下，在以agent为工具的开发者可以通过偏好设置，如AGENTS.md的文档进行编辑，来完成对模型的说话方式，以及操作习惯来进行个性化的设置，而通过今年2月以来对opencode的使用和二次开发，我对agent有了一些初步的了解
+对于许多用户来说，比如用本地模型参加CTF这类比赛的用户，有些会选择在本地训练大模型，而对于性能的要求也会比较大，且在允许上网的情况下，接入在线的满血大模型，之前的针对性训练内容就会失效，于是当时为了解决这类问题，我尝试进行了WLstudio的开发，在遇到一些不能秒解的问题时，让大模型在研究出来后通过将经验写入文档的方式进行保存，并在每次进行类似任务的时候灵活调用这些经验包来使得模型迅速解决这类问题。
+同时，当时的opencode并没有V2的内置浏览器供用户使用，当用户在浏览器里工作时，很难直接获取opencode的帮助，于是当时制作了一个浏览器桥接模块，给firefox装上对应插件后就可以让模型读取到浏览器的内容并接管操作，于是智慧树的题目我再也没自己做过。
+而在opencodeV2发布之前，我遇到了一些很严重的问题，在尝试用agent开发BVN的角色的时候，会话的上下文重发过于冗长，且包含大量图片信息，每一轮重发都会有大量无法命中缓存的数据，于是我尝试将图片这类文件在阅读后外置，避免参与上下文的重发，而V2的发布，让我得以重新坐下来慢慢梳理这个我日常使用的agent，并对其进行迭代升级。
+
 > 一个把「AI 编程助手」做成**能长期积累、跨会话延续、真正会动手**的桌面工作台。
->
 > 基于 [opencode](https://github.com/anomalyco/opencode)（MIT）二次开发，保留其内核能力，重做分发、偏好、经验积累与浏览器控制四层。
 
 ---
@@ -28,6 +33,9 @@ WLstudio 就是针对这五点做的工程化改造。
 
 不是「写一堆 md 文件」，而是**一套能被检索、能被守卫、能自我纠错的知识库**。
 
+在 V1 的经验包中，通常会出现如 `ctfshow靶场flag提交经验.md` 等类似的文件，这也就导致了 agent 在读取的时候无法灵活调用和快速检索需要的经验文档，于是在 V2 的更新中，重新构建了结构，分层的设定能更好的适配经验的检索和写入。
+这一特性稍作修改，也许可以作为一些智能体聊天用户对模型性格、行为逻辑的更完整解决方式。
+
 #### 5 层标签，让检索和防重犯同时成立
 
 每篇经验文档开头必须是受控 frontmatter：
@@ -35,8 +43,8 @@ WLstudio 就是针对这五点做的工程化改造。
 | 层 | 字段 | 作用 | 取值 |
 |---|---|---|---|
 | L1 | `domain` | 大领域，检索第一收敛点 | 10 |
-| L2 | `subject` | 域内知识块 | 35 |
-| L3 | `stack` | 具体工具/语言/平台（可多值） | 45 |
+| L2 | `subject` | 域内知识块 | 42 |
+| L3 | `stack` | 具体工具/语言/平台（可多值） | 51 |
 | L4 | `problem` | 问题类别，决定「怎么找」（可多值） | 12 |
 | L5 | `level` | **结论等级**：`VERIFIED` / `PARTIAL` / `EXCLUDED` / `REF` | 4 |
 
@@ -58,14 +66,14 @@ WLstudio 就是针对这五点做的工程化改造。
 
 - 纯关键词 BM25，top-3 片段，最多 1500 字符
 - 双重阈值（原始分数 ≥ 2.0、命中实体词 ≥ 2），防漏召也防拉满
-- 注入位置是**当前用户消息尾部**，不是 system —— 见下一节的缓存考量
+- 注入位置是**当前用户消息尾部**，不是 system（原因见下面「外置上下文」一节）
 
 #### 落点可移植
 
 经验库位置**不写死**，按优先级解析：
 
 ```
-WLSTUDIO_EX_BAGS  →  WLSTUDIO_DATA/ex-bags  →  <安装目录>/../WLstudio-data/ex-bags
+WLSTUDIO_EX_BAGS  →  WLSTUDIO_DATA/ex-bags  →  ~/WLstudio/ex-bags
 ```
 
 安装时由安装器把数据根写到所选安装盘（`<盘>:\WLstudio-data`），换设备自动重算。目的很实际：**经验库会随使用无限增长，不能塞在 C 盘用户目录里**。
@@ -173,9 +181,11 @@ PLAN 里原本还有「会话常驻记忆注入 system」，**被有意省略**�
 
 难点不在"怎么点"，在**怎么让多个会话同时用而不打架**。
 
+opencode 的内嵌浏览器能胜任让 agent 的搜索可视化的操作，但是在实际使用中，很少会有人在日常使用浏览器的时候打开其内嵌浏览器，导致任务进行到一半时需要 agent 帮助的时候可能需要在其内嵌浏览器里重新进行登录操作，于是尝试了使用火狐 DEV 作为特调的基底，其作为日常使用也能完美胜任，当然如果有其他需要适配的浏览器也可以根据源码让 agent 来自己操作。与 V1 的插件不同，V2 的这个桥接采用了内核直连，对桥接的功能和速度都有了巨大的提升。
+
 #### 硬约束：Firefox 每个实例只有一条 WebDriver BiDi 会话
 
-翻源码确认的（`WebDriverBiDi.sys.mjs`）：`createSession()` 里有 `if (this.#session) throw new SessionNotCreatedError("Maximum number of active sessions")`。
+翻源码确认的（`WebDriverBiDi.sys.mjs`）：`createSession()` 里检查到已有会话就直接抛 `SessionNotCreatedError`，错误消息是 `Maximum number of active sessions`。
 
 更坑的是：**关 socket 不释放会话**。`onConnectionClose()` 只调 `unregisterSession()`，把连接对象上的引用置空，**并不调用 `deleteSession()`**——全局槽位永久被占，只能重启浏览器。没有 pref 能放宽上限。
 
@@ -208,8 +218,9 @@ PLAN 里原本还有「会话常驻记忆注入 system」，**被有意省略**�
 
 ```
 firefox 进程 = 0 → navigate → 进程 13，session 1，upstream:"managed"
-3 个 tab 并发 navigate+evaluate = 2084ms（真并发，各返回自己页面）
+3 个 caller 并发 navigate = 438 / 568 / 526 ms（真并发，各返回自己页面）
 第 4 个 tab 导航后，前 3 个 tab 页面不受影响（tab 级隔离）
+强杀火狐后再 navigate = 2s 内自愈，无 "Maximum number of active sessions"
 stop 后立刻可重新 attach = 0 泄漏
 ```
 
@@ -220,6 +231,8 @@ stop 后立刻可重新 attach = 0 泄漏
 **坑 2：attach 失败就自动开新浏览器。** 原逻辑在 catch 里直接 `launchFirefox()`，用户看到的是"我什么也没让它开，它自己弹了个浏览器出来"。解法：attach 失败**改抛错**（`firefox.attachFailed:<原因>`），自动启动改为明确策略——**默认允许自己启动**（安装器已经知道浏览器在哪），但可由 `WLSTUDIO_BROWSER_AUTOLAUNCH=0` 关闭。
 
 **坑 3：页面加载了但用户看不见。** BiDi 没有"窗口焦点"概念，`navigate` 只切浏览器内部 tab，窗口还在 IDE 后面盖着，用户以为"什么都没打开"。解法：navigate 后用 Win32 `SetForegroundWindow` + `ShowWindow` 把窗口提到前台（仅 win32，1.5s 超时，失败不影响调用）。
+
+**坑 4：孤儿会话占死唯一槽位。** 持有者被强杀 / 断电后，槽位不会被释放，之后所有 attach 都失败，只能手动重启浏览器。解法：attach 前先做**不对称判活**——端口在听 + `session.status` 报槽位被占 + **TCP 连接表为空**，三者同时成立才判定为孤儿并回收自己那只火狐；只要存在任一 ESTABLISHED 连接就视为活着的持有者，绝不抢占（避免打断正在进行的浏览器项目）。
 
 > 还有一个只在服务器上才暴露的问题：如果 Firefox 是由**计划任务以 SYSTEM 身份在 session 0** 拉起的，它就没有可见桌面，`SetForegroundWindow` 跨 session 永远无效。判断"窗口是否真的可见"也必须在 **session 1 内部**跑探针——从 WinRM（session 0）查 `MainWindowHandle` 永远是 0，是假象。
 
@@ -257,8 +270,8 @@ stop 后立刻可重新 attach = 0 泄漏
 
 | 项 | 值 |
 |---|---|
-| 操作系统 | **Windows 10**（主要测试平台）；安装包为 x64 |
-| 桌面壳 | Electron 44 |
+| 操作系统 | **Windows 10 专业版 19045**（主要测试平台）；安装包为 x64 |
+| 桌面壳 | Electron 44.4.5 |
 | UI | SolidJS |
 | 内核 | 独立进程（Bun 编译），与桌面壳分离 |
 | 浏览器 | Firefox Developer Edition（可选安装，特调版独立 profile） |
@@ -294,7 +307,7 @@ stop 后立刻可重新 attach = 0 泄漏
 %USERPROFILE%\WARMUP.md                  启动预热
 %USERPROFILE%\WLstudio SE\SE-AGENTS.md   本机私有偏好（空骨架，自行填写）
 %USERPROFILE%\.config\wlstudio\           配置与插件
-<安装盘>:\WLstudio-data\ex-bags\          经验库（11 个域目录）
+<安装盘>:\WLstudio-data\ex-bags\          经验库（10 个域目录 + _state）
 ```
 
 ### 配置模型
