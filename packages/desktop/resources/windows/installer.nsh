@@ -142,6 +142,26 @@ FunctionEnd
   System::Call 'Kernel32::GetFullPathName(t r6, i 1024, t .r6, i 0)'
   CreateDirectory "$R6"
   CreateDirectory "$R6\ex-bags"
+
+  ; Closing the reinstall loop. The uninstaller moves the experience library to
+  ; %APPDATA%\WLstudio-data before deleting this folder, so a reinstall has to bring it back:
+  ; otherwise the rescued notes would sit in %APPDATA% forever while the freshly created install
+  ; library stays empty, and the user would conclude the uninstall lost their notes.
+  StrCpy $R8 "$APPDATA\WLstudio-data\ex-bags"
+  ${If} ${FileExists} "$R8\*.*"
+    StrCpy $R9 "$R6\ex-bags"
+    ClearErrors
+    CopyFiles /SILENT "$R8\*.*" "$R9"
+    IfErrors wl_data_keep_rescue
+      ; Only drop the rescue copy once the install copy actually holds files.
+      ${If} ${FileExists} "$R9\*.*"
+        RMDir /r "$R8"
+        RMDir "$APPDATA\WLstudio-data"
+        DetailPrint "已接回卸载时保留的经验库：$R9"
+      ${EndIf}
+  ${EndIf}
+  wl_data_keep_rescue:
+
   WriteRegStr HKCU "Environment" "WLSTUDIO_DATA" "$R6"
   System::Call 'Kernel32::SetEnvironmentVariable(t "WLSTUDIO_DATA", t r6)'
   DetailPrint "数据目录（经验库）：$R6"
