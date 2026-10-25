@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en" style="background-color: var(--background-base)">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>WLstudio</title>
+    <link rel="icon" type="image/png" href="./favicon-96x96-v3.png" sizes="96x96" />
+    <link rel="icon" type="image/svg+xml" href="./favicon-v3.svg" />
+    <link rel="shortcut icon" href="./favicon-v3.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon-v3.png" />
+    <meta name="theme-color" content="#F8F7F7" />
+    <meta property="og:image" content="./social-share.png" />
+    <meta property="twitter:image" content="./social-share.png" />
+    <script id="oc-theme-preload-script" src="./oc-theme-preload.js"></script>
+  </head>
+  <body class="antialiased overscroll-none text-12-regular overflow-hidden">
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root" class="flex flex-col h-dvh"></div>
+    <div id="wl-splash" style="position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center">
+      <video autoplay loop muted playsinline style="width:100%;height:100%;object-fit:cover;background:#000" id="wl-splash-video" src="./loading-bg.mp4"></video>
+    </div>
+    <script>
+      (function () {
+        var splash = document.getElementById("wl-splash");
+        var v = document.getElementById("wl-splash-video");
+        var hidden = false;
+        var playing = false;
+        var playStart = 0;
+        function hide() {
+          if (hidden) return;
+          hidden = true;
+          splash.style.transition = "opacity .4s";
+          splash.style.opacity = "0";
+          setTimeout(function () {
+            if (splash.parentNode) splash.parentNode.removeChild(splash);
+          }, 400);
+        }
+        v.addEventListener("playing", function () {
+          if (!playing) {
+            playing = true;
+            playStart = Date.now();
+          }
+        });
+        v.addEventListener("error", function () {
+          setTimeout(hide, 500);
+        });
+        v.play().catch(function () {});
+        function appReady() {
+          var root = document.getElementById("root");
+          if (!root || root.children.length === 0) return false;
+          if (root.querySelector('[data-component="startup-splash"]')) return false;
+          if (root.querySelector('[data-component="first-launch-splash"]')) return false;
+          return true;
+        }
+        var checks = 0;
+        var iv = setInterval(function () {
+          checks++;
+          if (playing && Date.now() - playStart >= 1200 && appReady()) {
+            clearInterval(iv);
+            hide();
+            return;
+          }
+          if (checks > 400) {
+            clearInterval(iv);
+            hide();
+          }
+        }, 100);
+      })();
+    </script>
+    <script src="./index.tsx" type="module"></script>
+  </body>
+</html>

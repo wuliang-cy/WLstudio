@@ -1,0 +1,77 @@
+.DS_Store
+node_modules
+.worktrees
+.sst
+.env
+.env.local
+.idea
+.vscode
+.codex
+*~
+playground
+tmp
+dist
+dist-node
+ts-dist
+.turbo
+.typecheck-profiles
+**/.serena
+.serena/
+**/.omo
+.omo/
+/result
+refs
+Session.vim
+/opencode.json
+a.out
+target
+.scripts
+.cache
+.direnv/
+
+# Local dev files
+opencode-dev
+UPCOMING_CHANGELOG.md
+RELEASE_REVIEW.md
+logs/
+*.bun-build
+tsconfig.tsbuildinfo
+/artifacts/
+
+# Build output and packaged artifacts. `dist` alone only matches the top-level directory, so the
+# per-target staging trees and the release folder used for installer builds were still being
+# tracked, which put hundreds of megabytes of binaries in the repository.
+/dist
+/dist-*
+/out
+packages/*/dist
+packages/*/dist-*
+packages/*/out
+packages/desktop/vendor
+packages/desktop/resources/opencode-cli*
+*.7z
+*.blockmap
+
+# Installer payloads that ship with the app and are rebuilt from downloads, not source.
+packages/desktop/resources/windows/firefox-devedition-setup.exe
+packages/desktop/resources/wlstudio-cli.exe
+packages/desktop/resources/wlstudio-cli.version
+
+# Scratch directories created while repacking.
+pack-*/
+pii-*/
+verify-*/
+codex-*/
+
+# OS and editor noise
+Thumbs.db
+desktop.ini
+*.bak
+*.bak-*
+*.bak.*
+*.log
+.DS_Store
+
+# Local preference copies kept next to the live file (`AGENTS.md.bak-pii-20261026`, ...).
+*.md.bak*
+NOTICE.*.bak*

@@ -1,0 +1,15 @@
+export default {
+  tooltip: "思考监控",
+  "command.toggle": "切换思考监控",
+  "overlay.thinking": "思考中",
+  "overlay.replying": "回复中",
+  "overlay.idle": "空闲",
+  "overlay.completed": "已完成",
+  "overlay.interrupted": "已中断",
+  "overlay.waiting": "等待模型输出",
+  "panel.show": "显示悬浮窗",
+  "panel.hide": "隐藏悬浮窗",
+  "panel.windowOpacity": "窗口透明度",
+  "panel.textOpacity": "文字透明度",
+  "panel.title": "思考监控",
+}

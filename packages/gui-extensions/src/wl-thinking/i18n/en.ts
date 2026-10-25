@@ -1,0 +1,15 @@
+export default {
+  tooltip: "Thinking monitor",
+  "command.toggle": "Toggle thinking monitor",
+  "overlay.thinking": "Thinking",
+  "overlay.replying": "Replying",
+  "overlay.idle": "Idle",
+  "overlay.completed": "Completed",
+  "overlay.interrupted": "Interrupted",
+  "overlay.waiting": "Waiting for the model",
+  "panel.show": "Show overlay",
+  "panel.hide": "Hide overlay",
+  "panel.windowOpacity": "Window opacity",
+  "panel.textOpacity": "Text opacity",
+  "panel.title": "Thinking monitor",
+}
