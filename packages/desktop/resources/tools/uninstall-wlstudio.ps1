@@ -159,16 +159,28 @@ Head "2/7 查找官方卸载器"
 
 # 开发/解压版（例如 \packages\desktop\dist\win-unpacked）没有注册表项，
 # 也没有 Uninstall WLstudio.exe，此时按"进程所在目录"识别安装位置。
+# Only processes whose binary really belongs to this product count as an install. Matching on the
+# leaf name alone is too loose: any unrelated build or headless sibling that happens to be called
+# WLstudio.exe (for example a server deployment living under its own folder) would be adopted and
+# then deleted. A directory qualifies when it sits in one of the standard install roots, or when it
+# carries the payload every real install ships (resources\app.asar).
 $installRoots = @()
 $allNow = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue
 foreach ($p in $allNow) {
     $exe = $p.ExecutablePath
     if (-not $exe) { continue }
     $leaf = Split-Path $exe -Leaf
-    if ($leaf -in @('WLstudio.exe', 'WLstudio Dev.exe')) {
-        $dir = Split-Path $exe -Parent
-        if ($dir -and $dir -notlike '*\Windows\*') { $installRoots += $dir }
+    if ($leaf -notin @('WLstudio.exe', 'WLstudio Dev.exe')) { continue }
+    $dir = Split-Path $exe -Parent
+    if (-not $dir) { continue }
+    if ($dir -like '*\Windows\*') { continue }
+    $standard = ($dir -in @($ProgDir1, $ProgDir2, $ProgDir3))
+    $hasPayload = (Test-Path (Join-Path $dir 'resources\app.asar'))
+    if (-not ($standard -or $hasPayload)) {
+        Say ("  ignoring unrelated process: {0}" -f $exe) 'DarkGray'
+        continue
     }
+    $installRoots += $dir
 }
 foreach ($extra in @($ProgDir1, $ProgDir2, $ProgDir3)) {
     if (Test-Path $extra) { $installRoots += $extra }
