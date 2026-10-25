@@ -214,7 +214,7 @@ updated: 2026-10-21
 ## 目录结构（实际布局）
 
 `
-E:\AIoutput\ex-bags\
+<经验库根目录>\
   _TAXONOMY.md      # 本词表（不参与检索）
   _INDEX.md         # 全库标签速查表（不参与检索）
   _state/           # 交接与归档，不参与检索

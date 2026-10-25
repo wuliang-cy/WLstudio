@@ -76,7 +76,9 @@ WLstudio 就是针对这五点做的工程化改造。
 WLSTUDIO_EX_BAGS  →  WLSTUDIO_DATA/ex-bags  →  ~/WLstudio/ex-bags
 ```
 
-安装时由安装器把数据根写到所选安装盘（`<盘>:\WLstudio-data`），换设备自动重算。目的很实际：**经验库会随使用无限增长，不能塞在 C 盘用户目录里**。
+安装时由安装器把数据根写到**安装目录内**（`<安装目录>\WLstudio-data`），换设备自动重算。目的很实际：经验库会随使用无限增长，不能塞在 C 盘用户目录里；而放进安装目录则既不假设盘符存在（有的机器只有 C 盘），也不需要管理员权限（per-user 安装写不了盘根）。
+
+卸载时安装器会先把 `ex-bags` 移到 `%APPDATA%\WLstudio-data\ex-bags` 并校验文件数，通过后才删除安装目录，所以重装不会丢笔记。
 
 ---
 
@@ -307,7 +309,7 @@ stop 后立刻可重新 attach = 0 泄漏
 %USERPROFILE%\WARMUP.md                  启动预热
 %USERPROFILE%\WLstudio SE\SE-AGENTS.md   本机私有偏好（空骨架，自行填写）
 %USERPROFILE%\.config\wlstudio\           配置与插件
-<安装盘>:\WLstudio-data\ex-bags\          经验库（10 个域目录 + _state）
+<安装目录>\WLstudio-data\ex-bags\         经验库（10 个域目录 + _state）
 ```
 
 ### 配置模型

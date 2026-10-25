@@ -67,6 +67,7 @@ Var TunedFirefoxPath
 ; Reads the recorded install location. An empty result means "nothing to reuse": the value is
 ; either absent or points at a directory the user has since deleted, and a stale path must not be
 ; treated as a live installation.
+
 Function WlDetectTunedFirefox
   StrCpy $TunedFirefoxPath ""
   ReadRegStr $0 HKCU "${TUNED_FF_KEY}" "Path"
@@ -132,16 +133,12 @@ FunctionEnd
   nsExec::ExecToLog '"$SYSDIR\icacls.exe" "$INSTDIR" /grant "*S-1-15-2-2:(OI)(CI)(RX)"'
   Pop $0
 
-  ; The experience library lives beside the installation, on whatever volume the user picked,
-  ; because it grows without bound and must outlive reinstalls. Record the resolved root so the
-  ; app can seed into it and rewrite the paths inside AGENTS.md / WARMUP.md on every launch.
-  ;
-  ; `$INSTDIR\..` is wrong for the per-user default (`%LOCALAPPDATA%\Programs\WLstudio`), where it
-  ; would resolve to `%LOCALAPPDATA%\Programs\WLstudio-data` and litter the Programs folder. Take
-  ; the drive root instead, so it always lands next to the installation volume as `X:\WLstudio-data`.
-  StrCpy $R6 "$INSTDIR"
-  StrCpy $R6 $R6 3            ; keep "X:\" only
-  StrCpy $R6 "$R6WLstudio-data"
+  ; All mutable data lives inside the install directory. Keeping it there means one folder to
+  ; back up, one folder to delete, and no assumption about which drives exist: this machine may
+  ; have only C:, and a per-user install cannot write a system drive root without elevation.
+  ; The uninstaller rescues `ex-bags` before removing the folder, so the experience library still
+  ; survives a reinstall.
+  StrCpy $R6 "$INSTDIR\WLstudio-data"
   System::Call 'Kernel32::GetFullPathName(t r6, i 1024, t .r6, i 0)'
   CreateDirectory "$R6"
   CreateDirectory "$R6\ex-bags"
@@ -209,10 +206,29 @@ FunctionEnd
   Delete "$DESKTOP\一键卸载 WLstudio.lnk"
   Delete "$DESKTOP\Firefox Developer Edition 特调版.lnk"
 
-  ; The data root holds the experience library, which the user builds up over months. Removing the
-  ; app must never take it, so only the environment variable goes; the directory stays where it is.
-  ; The standalone uninstaller offers an explicit opt-in if someone really wants it gone.
-  DeleteRegValue HKCU "Environment" "WLSTUDIO_DATA"
+  ; The experience library lives in `$INSTDIR\WLstudio-data\ex-bags` now, so uninstalling would
+  ; take it along with the program files. It is the one thing the user builds up over months and
+  ; cannot regenerate, so move it out to `%APPDATA%\WLstudio-data` before NSIS removes `$INSTDIR`,
+  ; and repoint the variable there. Silent and interactive uninstalls both do this.
+  ClearErrors
+  IfFileExists "$INSTDIR\WLstudio-data\ex-bags\*.*" 0 wl_uninst_no_rescue
+    ${If} ${FileExists} "$INSTDIR\resources\tools\rescue-ex-bags.ps1"
+      nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\resources\tools\rescue-ex-bags.ps1" -From "$INSTDIR\WLstudio-data\ex-bags"'
+      Pop $0
+      DetailPrint "经验库已移出：$APPDATA\WLstudio-data\ex-bags（$0）"
+    ${Else}
+      ; Robocopy keeps the tree and does not delete the destination contents it did not write.
+      nsExec::ExecToLog '"$SYSDIR\robocopy.exe" "$INSTDIR\WLstudio-data" "$APPDATA\WLstudio-data" /E /MOVE /NFL /NDL /NJH /NJS /nc /ns /np'
+      Pop $0
+    ${EndIf}
+    WriteRegStr HKCU "Environment" "WLSTUDIO_DATA" "$APPDATA\WLstudio-data"
+  wl_uninst_no_rescue:
+
+  ; Only the environment variable goes when the data root is outside the install directory; a
+  ; standalone uninstaller offers an explicit opt-in if someone really wants the library gone.
+  ${IfNot} ${FileExists} "$APPDATA\WLstudio-data\ex-bags\*.*"
+    DeleteRegValue HKCU "Environment" "WLSTUDIO_DATA"
+  ${EndIf}
 
   ; The tuned browser is a real browser that may hold the user's bookmarks and logins, so removal
   ; is a question, never a default. Silent uninstalls keep it, because a script cannot answer.

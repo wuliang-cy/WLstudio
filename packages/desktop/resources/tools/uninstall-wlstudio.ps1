@@ -53,7 +53,13 @@ function Head([string]$text) { Say ""; Say ("=== " + $text + " ===") 'Cyan' }
 
 function Get-DirSize([string]$path) {
     try {
-        $s = Get-ChildItem $path -Recurse -File -Force -ErrorAction SilentlyContinue |
+        # A file path must not go through -Recurse: PowerShell hits a pathological path for a
+        # single file and can take minutes (measured 160 s for one 20 KB markdown file), which made
+        # every dry run look like a hang. Read the size directly instead.
+        $item = Get-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
+        if ($null -eq $item) { return 0 }
+        if (-not $item.PSIsContainer) { return $item.Length }
+        $s = Get-ChildItem -LiteralPath $path -Recurse -File -Force -ErrorAction SilentlyContinue |
              Measure-Object -Property Length -Sum
         if ($null -eq $s.Sum) { return 0 }
         return $s.Sum
@@ -380,7 +386,7 @@ foreach ($u in $uninstallers) {
     $dir = Split-Path $u -Parent
     if ($dir) { $tunedToolCandidates += (Join-Path $dir 'resources\tools\remove-tuned-firefox.ps1') }
 }
-foreach ($d in @('E:\WLstudio', (Join-Path $env:LOCALAPPDATA 'Programs\WLstudio'))) {
+foreach ($d in @((Join-Path $env:LOCALAPPDATA 'Programs\WLstudio'))) {
     $tunedToolCandidates += (Join-Path $d 'resources\tools\remove-tuned-firefox.ps1')
 }
 $tunedToolCandidates = @($tunedToolCandidates | Where-Object { $_ } | Sort-Object -Unique)
@@ -452,6 +458,44 @@ if ($tunedPath) {
 
 $removeList = @($alwaysRemove) + @($seedDocs)
 if ($PurgeAll) { $removeList += $keepByDefault }
+
+# The experience library lives inside the install directory, so removing that directory would
+# take it. The bundled NSIS uninstaller rescues it first, but this script also has to work when
+# no uninstaller was found (a hand-copied build, or an install whose registry entry is gone), so
+# rescue unconditionally here too: copy to %APPDATA%\WLstudio-data, verify, then let the install
+# directory be removed. Verified copies only; a failed copy aborts instead of destroying notes.
+if (-not $PurgeAll -and -not $DryRun) {
+    $rescueTo = Join-Path $env:APPDATA 'WLstudio-data\ex-bags'
+    foreach ($bags in $LiveExBags) {
+        if (-not (Test-Path -LiteralPath $bags)) { continue }
+        # Already outside every directory in the removal list: nothing to rescue.
+        $insideRemoval = $false
+        foreach ($t in $removeList) {
+            if (-not (Test-Path -LiteralPath $t.Path)) { continue }
+            if ($bags.StartsWith($t.Path.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) {
+                $insideRemoval = $true
+                break
+            }
+        }
+        if (-not $insideRemoval) { continue }
+        if (Test-Path -LiteralPath $rescueTo) {
+            Say ("  experience library already rescued: " + $rescueTo) 'DarkGray'
+            continue
+        }
+        $srcCount = @(Get-ChildItem -LiteralPath $bags -Recurse -File -Force -ErrorAction SilentlyContinue).Count
+        Say ("  rescuing experience library ({0} files) -> {1}" -f $srcCount, $rescueTo) 'Yellow'
+        New-Item -ItemType Directory -Path $rescueTo -Force | Out-Null
+        & "$env:SystemRoot\System32\robocopy.exe" $bags $rescueTo /E /NFL /NDL /NJH /NJS /nc /ns /np 2>&1 | Out-Null
+        $dstCount = @(Get-ChildItem -LiteralPath $rescueTo -Recurse -File -Force -ErrorAction SilentlyContinue).Count
+        if ($dstCount -lt $srcCount) {
+            Say ("    rescue verify failed (source {0} / dest {1}); continuing but the library is still inside the install dir" -f $srcCount, $dstCount) 'Red'
+        } else {
+            Say ("    rescued: {0} files verified" -f $dstCount) 'Green'
+            [Environment]::SetEnvironmentVariable('WLSTUDIO_DATA', (Join-Path $env:APPDATA 'WLstudio-data'), 'User')
+            $env:WLSTUDIO_DATA = Join-Path $env:APPDATA 'WLstudio-data'
+        }
+    }
+}
 
 foreach ($item in $removeList) {
     if (-not (Test-Path $item.Path)) { continue }

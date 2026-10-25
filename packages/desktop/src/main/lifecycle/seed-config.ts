@@ -52,11 +52,40 @@ export type PathTargets = { exBagsDir: string; seDir: string; home: string }
  * Honours `WLSTUDIO_DATA` (written by the installer for the selected install volume) and falls
  * back to a sibling `WLstudio-data` directory next to the executable.
  */
+/**
+ * Where the experience library and database live.
+ *
+ * The installer records the root it managed to create in `WLSTUDIO_DATA`, so that is authoritative.
+ * Without it (portable run, dev build, or a user who cleared the variable) fall back the same way
+ * the installer searches: beside the install volume first, then under `%APPDATA%`. A drive letter is
+ * never assumed — a machine may have only `C:`, and a per-user install cannot write a system drive
+ * root at all.
+ */
+/**
+ * Where mutable data (the experience library) lives.
+ *
+ * The installer records `WLSTUDIO_DATA`, and that is always the answer when it is set. The
+ * fallbacks exist for a launch without the installer (a dev checkout, or a machine where the
+ * variable was cleared), and they must land on the same directory the installer would have
+ * chosen: `<install>\WLstudio-data`, next to the executable. A drive letter is never assumed,
+ * because a machine may only have `C:` and a per-user install cannot write a drive root.
+ *
+ * After an uninstall the library is rescued to `%APPDATA%\WLstudio-data`, and that rescue sets
+ * `WLSTUDIO_DATA` to match, so the next install picks it back up rather than starting empty.
+ */
 export function dataDir() {
   const configured = process.env.WLSTUDIO_DATA
   if (configured && configured.length > 0) return configured
   const exe = process.execPath
-  if (exe && exe.length > 0) return path.join(path.dirname(exe), "..", "WLstudio-data")
+  if (exe && exe.length > 0) {
+    const beside = path.join(path.dirname(exe), "WLstudio-data")
+    try {
+      mkdirSync(beside, { recursive: true })
+      return beside
+    } catch {}
+  }
+  const roaming = process.env.APPDATA
+  if (roaming && roaming.length > 0) return path.join(roaming, "WLstudio-data")
   return path.join(homeRoot(), "WLstudio-data")
 }
 
