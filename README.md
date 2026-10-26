@@ -7,9 +7,9 @@
 
 | 平台 | 下载 |
 |---|---|
-| Windows x64 | [wlstudio-desktop-2.3.13-win-x64.exe](https://github.com/wuliang-cy/WLstudio/releases/download/v2.3.14/wlstudio-desktop-2.3.14-win-x64.exe)（323.4 MB） |
+| Windows x64 | [从最新版本下载](https://github.com/wuliang-cy/WLstudio/releases/latest)（323 MB 左右） |
 
-全部版本见 [Releases](https://github.com/wuliang-cy/WLstudio/releases)。
+上面的链接始终指向最新版本；需要特定版本或查看更新说明，去 [Releases](https://github.com/wuliang-cy/WLstudio/releases)。
 
 安装时会出现「特调火狐」页面，询问是否一并安装 Firefox Developer Edition（默认勾选）。
 这一项不要跳过：浏览器的操控能力依赖它，特调版使用独立配置，不影响系统里其它浏览器。
