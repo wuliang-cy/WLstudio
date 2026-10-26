@@ -488,6 +488,8 @@ export const dict = {
   "settings.general.row.uiFont.description": "自定义整个界面使用的字体",
   "settings.general.row.mobileTitlebarBottom.title": "底部导航",
   "settings.general.row.mobileTitlebarBottom.description": "在移动设备上将标题栏和会话标签页置于屏幕底部",
+  "settings.general.row.modelBackdrop.title": "模型彩蛋背景",
+  "settings.general.row.modelBackdrop.description": "使用 deepseek 系模型时在对话背景显示一张插图，不影响功能，可随时关闭",
   "settings.general.row.showCustomAgents.title": "显示智能体",
   "settings.general.row.showCustomAgents.description": "在输入框中切换智能体。隐藏时默认使用 Build 智能体。",
   "settings.general.row.pinchZoom.title": "双指缩放",

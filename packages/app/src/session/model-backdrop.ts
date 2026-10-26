@@ -1,5 +1,6 @@
 import { type Accessor, createMemo } from "solid-js"
 import { useLocal } from "@/providers/models/selection"
+import { useSettings } from "@/settings/model"
 
 /**
  * Per-session chat background. Some deployments want a visible marker for a model family, so a
@@ -18,8 +19,12 @@ const OPACITY = 0.2
 
 export function createModelBackdrop(): Accessor<string | undefined> {
   const local = useLocal()
+  const settings = useSettings()
 
   const matches = createMemo(() => {
+    // The switch is the escape hatch: a deployment without the illustration can turn it off instead
+    // of shipping a fork.
+    if (!settings.general.modelBackdrop()) return false
     const model = local.model.current()
 
     if (!model) return false

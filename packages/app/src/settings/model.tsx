@@ -111,6 +111,9 @@ const generalSchema = Persistence.struct({
     tools: placementOnlySchema,
   }),
   showCustomAgents: Schema.Boolean,
+  // The model-family chat background is decorative. Some deployments want it off entirely, so it is
+  // a stored preference instead of a build-time constant.
+  modelBackdrop: Schema.Boolean,
   mobileTitlebarPosition: Schema.Literals(["top", "bottom"]),
   // Owned by the review extension, which copies it out once; kept so settings rewrites cannot drop it first.
   mobileDiffWrap: Persistence.optional(Schema.Boolean),
@@ -268,6 +271,7 @@ export const defaultSettings: Settings = {
     showFileTree: false,
     timelineDetail: { ...timelinePresets[2].value },
     showCustomAgents: false,
+    modelBackdrop: true,
     mobileTitlebarPosition: "top",
     terminalPlacement: "side",
     followUpBehavior: "steer",
@@ -331,6 +335,10 @@ export const { use: useSettings, provider: SettingsProvider } = createSimpleCont
         showCustomAgents,
         setShowCustomAgents(value: boolean) {
           setStore("general", "showCustomAgents", value)
+        },
+        modelBackdrop: withFallback(() => store.general?.modelBackdrop, defaultSettings.general.modelBackdrop),
+        setModelBackdrop(value: boolean) {
+          setStore("general", "modelBackdrop", value)
         },
         mobileTitlebarPosition: withFallback(
           () => store.general?.mobileTitlebarPosition,

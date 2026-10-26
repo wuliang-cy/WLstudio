@@ -278,6 +278,18 @@ export const SettingsGeneral: Component = () => {
           </div>
         </SettingsRow>
 
+        <SettingsRow
+          title={language.t("settings.general.row.modelBackdrop.title")}
+          description={language.t("settings.general.row.modelBackdrop.description")}
+        >
+          <div data-action="settings-model-backdrop">
+            <Switch
+              checked={settings.general.modelBackdrop()}
+              onChange={(checked) => settings.general.setModelBackdrop(checked)}
+            />
+          </div>
+        </SettingsRow>
+
         <TerminalPlacementSetting />
         <FollowUpBehaviorSetting />
 

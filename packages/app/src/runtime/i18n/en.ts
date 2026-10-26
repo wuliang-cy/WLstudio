@@ -808,7 +808,9 @@ export const dict = {
   "settings.general.row.uiFont.description": "Customise the font used throughout the interface",
   "settings.general.row.mobileTitlebarBottom.title": "Bottom navigation",
   "settings.general.row.mobileTitlebarBottom.description": "Place the title bar at the bottom of the screen on mobile",
-  "settings.general.row.showCustomAgents.title": "Show agent",
+  "settings.general.row.modelBackdrop.title": "Model background",
+    "settings.general.row.modelBackdrop.description": "Show an illustration behind the transcript when a deepseek model is selected. Purely decorative, and can be turned off at any time.",
+    "settings.general.row.showCustomAgents.title": "Show agent",
   "settings.general.row.showCustomAgents.description":
     "Switch between agents in the composer. When hidden, defaults to Build agent.",
   "settings.general.row.followUpBehavior.title": "Follow-up behavior",
