@@ -7,7 +7,7 @@
 
 | 平台 | 下载 |
 |---|---|
-| Windows x64 | [wlstudio-desktop-2.3.13-win-x64.exe](https://github.com/wuliang-cy/WLstudio/releases/download/v2.3.13/wlstudio-desktop-2.3.13-win-x64.exe)（323.4 MB） |
+| Windows x64 | [wlstudio-desktop-2.3.13-win-x64.exe](https://github.com/wuliang-cy/WLstudio/releases/download/v2.3.14/wlstudio-desktop-2.3.14-win-x64.exe)（323.4 MB） |
 
 全部版本见 [Releases](https://github.com/wuliang-cy/WLstudio/releases)。
 
