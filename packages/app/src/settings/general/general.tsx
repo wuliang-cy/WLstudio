@@ -164,12 +164,19 @@ const FollowUpBehaviorSetting: Component = () => {
 
 const LanguageSetting = () => {
   const language = useLanguage()
-  // `useServer()` only resolves inside a `ServerProvider`, and the general tab renders outside that
-  // scope, so asking for it there threw and took the whole settings screen down. The registry of
-  // connections is application-wide, which is all this row needs: pick the connection the same way
-  // the shell does, then hand it to the controller.
-  const servers = useServers()
-  const sync = createServerLanguageController(() => servers.list[0])
+  // The general tab renders outside `ServerProvider`, and also outside the ready gate of
+  // `ServersProvider` (its context is gated on hydration), so both `useServer()` and `useServers()`
+  // throw here and take the whole settings screen down. This row does not need a connection to work:
+  // the UI locale is local state and pushing it to the kernel is a best-effort side effect. When the
+  // registry is not available yet the row still switches the locale and simply skips the sync.
+  const sync = (() => {
+    try {
+      const servers = useServers()
+      return createServerLanguageController(() => servers.list[0])
+    } catch {
+      return { sync: (_locale: string) => {} }
+    }
+  })()
 
   const options = createMemo(() =>
     language.locales.map((locale) => ({
