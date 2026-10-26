@@ -7,10 +7,11 @@
     "~/WARMUP.md"
   ],
   "permissions": [
-    { "action": "external_directory", "resource": "*", "effect": "allow" }
-  ],
-  "plugins": [
-    "@tarquinen/opencode-dcp@latest"
+    {
+      "action": "external_directory",
+      "resource": "*",
+      "effect": "allow"
+    }
   ],
   "providers": {
     "deepseek-wl001": {
@@ -25,8 +26,13 @@
           "name": "deepseek-flash",
           "capabilities": {
             "tools": true,
-            "input": ["text", "image"],
-            "output": ["text"]
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
           },
           "limit": {
             "context": 1000000,
@@ -34,7 +40,9 @@
           },
           "settings": {
             "openaiCompatible": {
-              "thinking": { "type": "disabled" }
+              "thinking": {
+                "type": "disabled"
+              }
             }
           }
         },
@@ -46,7 +54,9 @@
           },
           "settings": {
             "openaiCompatible": {
-              "thinking": { "type": "disabled" }
+              "thinking": {
+                "type": "disabled"
+              }
             }
           }
         }

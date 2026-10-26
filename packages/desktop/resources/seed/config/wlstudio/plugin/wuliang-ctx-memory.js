@@ -189,7 +189,12 @@ function imageNote(filePath) {
 //    reasoning_content 回传（已实测），每轮重发既费 token 又可能扰动缓存。
 //    这里每轮一律剔除（确定性 → 发送前缀稳定，不破坏前缀缓存）。返回统计。
 export function transformMessages(messages, saveImage) {
-  const stats = { externalizedImages: 0, savedImages: 0, strippedReasoning: 0 };
+  const stats = {
+      externalizedImages: 0,
+      savedImages: 0,
+      strippedReasoning: 0,
+      externalizedTexts: 0,
+    };
   if (!Array.isArray(messages)) return stats;
 
   for (const msg of messages) {
@@ -270,6 +275,46 @@ export function transformMessages(messages, saveImage) {
             text: notes.join("\n"),
           });
         }
+        continue;
+      }
+
+      // A tool result can carry images and oversized text inside `state.content` instead of
+      // `state.attachments`. `read` on a picture is the common case: the file part holds the whole
+      // base64 payload, so a single screenshot would otherwise stay resident in every later request.
+      // Rewrite those inner parts in place and leave a path note behind.
+      if (part.type === "tool" && part.state && Array.isArray(part.state.content)) {
+        let touched = false;
+        const rewritten = [];
+        for (const inner of part.state.content) {
+          if (!inner || typeof inner !== "object") {
+            rewritten.push(inner);
+            continue;
+          }
+          if (inner.type === "file" && isDataUrl(inner.url)) {
+            const file = saveImage(inner.url);
+            stats.externalizedImages++;
+            if (file) {
+              stats.savedImages++;
+              touched = true;
+              rewritten.push({ type: "text", text: imageNote(file) });
+              continue;
+            }
+            rewritten.push(inner);
+            continue;
+          }
+          if (inner.type === "text" && typeof inner.text === "string" && inner.text.length > TOOL_LIMIT) {
+            const shortened = shortenToolOutput(inner.text, saveText);
+            if (shortened.externalized) {
+              stats.externalizedTexts++;
+              touched = true;
+              rewritten.push({ type: "text", text: shortened.text });
+              continue;
+            }
+          }
+          rewritten.push(inner);
+        }
+        if (touched) part.state.content = rewritten;
+        newParts.push(part);
         continue;
       }
 

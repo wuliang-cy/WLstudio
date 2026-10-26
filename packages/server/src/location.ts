@@ -33,9 +33,14 @@ export function locationErrors<A, E, R>(effect: Effect.Effect<A, E, R>) {
   )
 }
 
+// Plugin activation includes materializing local plugin files, and on a first run Windows Defender
+// scans the freshly written tree before anything can be imported. Five seconds was measured only on
+// a warm development machine: a cold install on slower hardware can miss it and then every request
+// answers 503 "Location plugins did not finish activating". The budget stays bounded so a genuinely
+// stuck plugin still surfaces, just not as a false failure on first launch.
 export const awaitPlugins = Plugin.awaitActivation.pipe(
   Effect.timeoutOrElse({
-    duration: "5 seconds",
+    duration: "30 seconds",
     orElse: () =>
       Effect.fail(
         new ServiceUnavailableError({
