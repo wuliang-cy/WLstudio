@@ -6,6 +6,7 @@ import {
   LLMClient,
   LLMEvent,
   isContextOverflowFailure,
+  isPayloadTooLargeFailure,
   type ProviderErrorEvent,
   type ToolCall,
 } from "@opencode/ai"
@@ -28,6 +29,17 @@ import { SessionUsage } from "../usage.js"
 import { SessionRunnerModel } from "./model.js"
 import { createLLMEventPublisher } from "./publish-llm-event.js"
 import { SessionRunnerRetry } from "./retry.js"
+
+/**
+ * A rejected request that shrinking the history can fix.
+ *
+ * Two classifications qualify: the model ran out of context, or the request body itself was too
+ * large. They differ in how the provider reports them but not in what to do about it, and treating
+ * the second as fatal is what made an oversized session fail on every turn with no way back. The
+ * compaction path already knew how to shrink a rejected request; it just never ran.
+ */
+const recoverableOverflow = (failure: unknown) =>
+  isContextOverflowFailure(failure) || isPayloadTooLargeFailure(failure)
 
 export type Outcome = Data.TaggedEnum<{
   Completed: { readonly needsContinuation: boolean }
@@ -116,7 +128,7 @@ export const make = Effect.gen(function* () {
           if (!publisher.hasStarted()) yield* Fiber.join(pendingStartSnapshot)
           if (
             LLMEvent.is.providerError(event) &&
-            isContextOverflowFailure(event) &&
+            recoverableOverflow(event) &&
             !publisher.record().outputStarted
           ) {
             overflowFailure = event
@@ -159,7 +171,7 @@ export const make = Effect.gen(function* () {
         const overflow = overflowFailure ?? streamFailure
         if (
           !publisher.record().outputStarted &&
-          isContextOverflowFailure(overflow) &&
+          recoverableOverflow(overflow) &&
           (yield* restore(input.recoverOverflow))
         ) {
           yield* Effect.logWarning("provider rejected the request as too long; compacting", {
@@ -191,7 +203,7 @@ export const make = Effect.gen(function* () {
         )
           return Outcome.RecoverFull()
         const retry =
-          llmFailure && llmError && !isContextOverflowFailure(llmFailure)
+          llmFailure && llmError && !recoverableOverflow(llmFailure)
             ? yield* restore(
                 input.retry(
                   llmFailure,

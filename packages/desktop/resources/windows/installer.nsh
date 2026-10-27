@@ -24,6 +24,23 @@
 ; the hook does not depend on include ordering; the installer runs under a
 ; different executable name and is unaffected.
 ; ---------------------------------------------------------------------------
+!macro customInit
+  ; An upgrade must not ask the user anything it already knows.
+  ;
+  ; The assisted installer wraps the license and directory pages in `skipPageIfUpdated`, but the
+  ; install-mode page (all users / current user) sits outside that wrapper, so every upgrade stopped
+  ; there and looked like a fresh install. The mode is already recorded in the registry from the
+  ; previous run and `initMultiUser` has restored it by now, so there is nothing to ask.
+  ;
+  ; Resuming an install carries `--updated`; a first install does not, which is what keeps the full
+  ; wizard for someone installing for the first time.
+  ${GetParameters} $R0
+  ${GetOptions} $R0 "--updated" $R1
+  ${IfNot} ${Errors}
+    SetSilent silent
+  ${EndIf}
+!macroend
+
 !macro customCheckAppRunning
   nsExec::ExecToLog '"$SYSDIR\taskkill.exe" /F /IM "${APP_EXECUTABLE_FILENAME}"'
   Pop $0
@@ -223,6 +240,22 @@ FunctionEnd
 !macroend
 
 !macro customUnInstall
+  ; An upgrade runs this same uninstaller with `--updated`, right before the new files land in the
+  ; very same directory. Everything below exists to protect against losing data when the install
+  ; folder is destroyed, and none of it should happen during an upgrade:
+  ;   * moving the experience library out and back costs two copies of a tree that grows over time
+  ;   * a crash in between leaves the library stranded in %APPDATA% with the environment variable
+  ;     pointing at a directory the new install is not using
+  ;   * the shortcuts are deleted here and recreated moments later
+  ; NSIS removes only the files it installed, so running the uninstaller over the old build already
+  ; clears the previous app while leaving user data untouched.
+  ${GetParameters} $R0
+  ${GetOptions} $R0 "--updated" $R1
+  ${IfNot} ${Errors}
+    DetailPrint "升级模式：保留数据目录、环境变量与快捷方式"
+    Goto wl_uninst_upgrade_done
+  ${EndIf}
+
   Delete "$DESKTOP\一键卸载 WLstudio.lnk"
   Delete "$DESKTOP\Firefox Developer Edition 特调版.lnk"
 
@@ -281,6 +314,8 @@ FunctionEnd
     Goto wl_uninst_done
 
   wl_uninst_done:
+
+  wl_uninst_upgrade_done:
     ClearErrors
   ${EndIf}
 !macroend

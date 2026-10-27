@@ -75,6 +75,23 @@ export const isContextOverflowFailure = (failure: unknown) =>
     : Schema.is(ProviderErrorEvent)(failure) && failure.classification === "context-overflow"
 
 /**
+ * Rejected for being too big, usually a 413 Payload Too Large.
+ *
+ * This is recoverable in exactly the same sense as a context overflow: the request itself is valid,
+ * it just does not fit. Shrinking the history and sending again succeeds, so the main loop has to
+ * treat both classifications alike. Without that, a long session that grows past the gateway limit
+ * fails forever, because the request is neither retried nor compacted, and the user only sees the
+ * same error on every turn.
+ *
+ * The reported message for such a failure is often misleading on its own: a gateway can wrap a 413
+ * as "Upstream response was not valid JSON", so the status, not the text, is what identifies it.
+ */
+export const isPayloadTooLargeFailure = (failure: unknown) =>
+  failure instanceof AIError
+    ? failure.reason._tag === "InvalidRequest" && failure.reason.classification === "payload-too-large"
+    : Schema.is(ProviderErrorEvent)(failure) && failure.classification === "payload-too-large"
+
+/**
  * Whether a quota rejection belongs to a windowed subscription plan rather than an
  * exhausted balance.
  *
