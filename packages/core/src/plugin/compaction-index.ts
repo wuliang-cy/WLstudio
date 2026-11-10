@@ -213,30 +213,93 @@ export const readPayload = (input: unknown) => {
   return { summary, topic }
 }
 
+/** A single bare token in backticks - a name, not a topic. CJK counts: `` `众测业务` `` is a label. */
+const IDENTIFIER_SPAN = /^`[\w.\-\u4e00-\u9fff]{1,40}`$/u
+/** A filesystem path: its segments are directory names, not subject matter. */
+const PATH_LIKE = /\b[\w.-]+(?:[\\/][\w.-]+)+\b/gu
+const URL_LIKE = /[a-z][a-z0-9+.-]*:\/\/\S+/giu
+const FENCED_BLOCK = /```[\s\S]*?```/gu
+/** The `- 域: ...` header a stored segment carries. */
+const DOMAIN_LINE = /^-\s*域[:：].*$/gmu
+/** Preference row keys, e.g. `pref.ctf.flag-format`. The domain is part of the name. */
+const PREF_KEY = /pref\.[\w.]+/gu
+
+/**
+ * Removes the parts of a summary that hold names instead of subject matter.
+ *
+ * Paths are the big one: `packages/core/src/plugin/` made bounty match through `src`,
+ * because `src` there is a directory and not a security response center. Inline code is
+ * next: a session that designs the preference tree names every domain (`ctf`, `bounty`,
+ * `proxy`), so classifying on the raw text activates all of them - the vocabulary of the
+ * feature cannot be evidence for using the feature. Spans that hold punctuation
+ * (`` `flag{...}` ``, `` `adb shell` ``) are kept, since those are commands and literals.
+ */
+const plainText = (summary: string) =>
+  summary
+    .replace(FENCED_BLOCK, " ")
+    .replace(URL_LIKE, " ")
+    .replace(PATH_LIKE, " ")
+    .replace(PREF_KEY, " ")
+    .replace(/`[^`\n]*`/gu, (span) => (IDENTIFIER_SPAN.test(span) ? " " : span))
+    .replace(DOMAIN_LINE, " ")
+
 /**
  * Picks the domains a summary is about.
  *
- * The summary carries the objective and the constraints, so a keyword pass over it
- * is both cheap and well grounded: `flag{}` only shows up in CTF work, `VPN` and
- * `众测` only in bounty work, and so on. A model call would classify better, but it
- * would also cost a request on every compaction, so this stays deterministic and the
- * misses are visible in the note's domain line for later correction.
+ * The summary carries the objective and the constraints, so a keyword pass over it is
+ * both cheap and well grounded. A model call would classify better, but it would also
+ * cost a request on every compaction, so this stays deterministic and the misses remain
+ * visible in the note's domain line for later correction.
+ *
+ * Each domain has strong and weak evidence. Strong evidence is unambiguous in this
+ * context - `雷神`, `bkcrack`, `electron-builder`. Weak evidence is a word that also
+ * occurs in other senses: `代理` is both a proxy server and a Unicode surrogate pair,
+ * `截图` appears in a report as a deliverable, `图片` shows up in the phrase describing
+ * image off-loading. One weak word therefore never activates a domain on its own - it
+ * says an artefact exists, not that this is the kind of work being done.
  */
-const SIGNALS: ReadonlyArray<readonly [Domain, RegExp]> = [
-  ["ctf", /\bctf\b|flag\{|解题|题目|writeup|wp\b|靶场|bkcrack|misc\d|web\d|osint/iu],
-  ["bounty", /众测|漏洞提交|雷神|bountyteam|审核意见|src\b|赏金|漏洞报告/iu],
-  ["packaging", /安装包|打包|electron-builder|nsis|installer\.nsh|asar|出包|release|签名|rcedit/iu],
-  ["report", /实验报告|实验\d|docx|报告|作业|截图插入|排版/iu],
-  ["image", /图片|截图|像素|抠像|精灵|立绘|识图|视觉/iu],
-  ["answer", /答题|智慧树|超星|题库|单选|多选|填空题/iu],
-  ["android", /安卓|apk|adb|重打包|逆向|jadx|smali/iu],
-  ["proxy", /vpn|代理|proxy|clash|7890|tun\s*模式/iu],
+const SIGNALS: ReadonlyArray<readonly [Domain, RegExp, RegExp | null]> = [
+  ["ctf", /flag\{|\bctf\b|writeup|\bwp\b|靶场|bkcrack|\bmisc\d|\bweb\d|osint|\bpwn\b/iu, /解题|题目/iu],
+  ["bounty", /众测|雷神|bountyteam|赏金|漏洞提交|漏洞报告|审核意见/iu, /漏洞|审核/iu],
+  [
+    "packaging",
+    /安装包|打包|electron-builder|\bnsis\b|installer\.nsh|asar|出包|rcedit|代码签名/iu,
+    /\brelease\b|版本号|签名/iu,
+  ],
+  ["report", /实验报告|实验\d|\bdocx\b|作业|截图插入|排版|论文/iu, /报告|实验/iu],
+  ["image", /像素|抠像|精灵|立绘|识图|文生图|视觉模型/iu, /图片|截图|视觉|透明/iu],
+  ["answer", /智慧树|超星|题库|单选|多选|填空题/iu, /答题/iu],
+  ["android", /安卓|\bapk\b|\badb\b|jadx|smali/iu, /安卓|apk/iu],
+  [
+    "proxy",
+    /\bvpn\b|clash|7890|7891|\bsocks5?\b|tun\s*模式|http_proxy|科学上网|翻墙|代理服务器|代理软件/iu,
+    /代理|proxy/iu,
+  ],
 ]
 
+/** How many distinct words from `pattern` occur in `text`. */
+const distinctHits = (text: string, pattern: RegExp) => {
+  const seen = new Set<string>()
+  for (const match of text.matchAll(new RegExp(pattern.source, pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`)))
+    seen.add(match[0].toLowerCase())
+  return seen.size
+}
+
+/**
+ * Two distinct weak words are treated as real signal. One is not: a single `代理` can be a
+ * Unicode surrogate pair, a single `图片` can be the name of an off-loading feature.
+ */
+const WEAK_THRESHOLD = 2
+
 export const classify = (summary: string): Domain[] => {
+  const text = plainText(summary)
   const hits: Domain[] = []
-  for (const [domain, pattern] of SIGNALS) {
-    if (pattern.test(summary)) hits.push(domain)
+  for (const [domain, strong, weak] of SIGNALS) {
+    if (strong.test(text)) {
+      hits.push(domain)
+      continue
+    }
+    if (weak && distinctHits(text, weak) >= WEAK_THRESHOLD) hits.push(domain)
   }
   return hits
 }

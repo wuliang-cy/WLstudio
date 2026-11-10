@@ -409,7 +409,7 @@
     },
     "packages/desktop": {
       "name": "@opencode/desktop",
-      "version": "2.3.17",
+      "version": "2.3.18",
       "dependencies": {
         "@zip.js/zip.js": "2.7.62",
         "electron-context-menu": "5.0.0",
