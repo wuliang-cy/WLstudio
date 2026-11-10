@@ -118,18 +118,73 @@ $literals = @(
 
 $literalHits = 0
 $piiSeedRoot = Join-Path $Root 'resources\seed'
+
+# Two hits are legitimate and must not fail the build:
+#
+#   `WLstudio SE\SE-AGENTS` is the documented location of the user's own preferences. The template
+#   has to name it, otherwise the user cannot find the file it is telling them to create. The
+#   directory is a product convention, not the author's private path.
+#
+#   `E:\AIoutput` appears four times inside `wlstudio-cli.exe`, but it is not data we control: Bun
+#   bakes the build machine's absolute paths into the binary when it bundles the runtime, and all
+#   four occurrences point at third-party packages under `node_modules`. Every build carries them,
+#   including the older kernels, so it is a property of the toolchain rather than something a
+#   release introduces.
+$allowInFile = @{
+    'prefs\AGENTS.md' = @('WLstudio SE\SE-AGENTS')
+}
+$allowInBinary = @{
+    'wlstudio-cli.exe' = @('E:\AIoutput')
+}
+
 if (Test-Path $piiSeedRoot) {
     foreach ($f in (Get-ChildItem $piiSeedRoot -Recurse -File -Force -EA SilentlyContinue)) {
         $text = Read-Bytes $f.FullName
+        $rel = $f.FullName.Replace($piiSeedRoot, '')
         foreach ($lit in $literals) {
-            if ($text.Contains($lit)) {
-                Fail ("machine-specific literal '{0}' in {1}" -f $lit, $f.FullName.Replace($piiSeedRoot, 'seed'))
-                $literalHits++
+            if (-not $text.Contains($lit)) { continue }
+
+            # Skip a hit that is explicitly allow-listed for this exact file.
+            $allowed = $false
+            foreach ($key in $allowInFile.Keys) {
+                if ($rel -like ('*' + $key) -and $allowInFile[$key] -contains $lit) { $allowed = $true }
             }
+            if ($allowed) {
+                Note ("allow-listed literal '{0}' in {1} (product convention)" -f $lit, $rel)
+                continue
+            }
+
+            Fail ("machine-specific literal '{0}' in {1}" -f $lit, $rel)
+            $literalHits++
         }
     }
 }
 Note ("literals scanned: {0} patterns over seed" -f $literals.Count)
+
+# ---------------------------------------------------------------------------
+# Rule 3b: the kernel binary must not gain new machine paths.
+#
+# A compiled binary can carry the build machine's directories inside it, and a path that appears
+# there is just as visible to a user as one in a text file. The scan can only tolerate what the
+# current toolchain produces, so it pins the known set: any literal not allow-listed for that
+# binary aborts the build. A new path therefore cannot slip in unnoticed.
+# ---------------------------------------------------------------------------
+$binFiles = @(Get-ChildItem $Root -Recurse -File -Force -EA SilentlyContinue |
+    Where-Object { $_.Extension -eq '.exe' -and $_.Length -gt 1MB })
+foreach ($f in $binFiles) {
+    $text = Read-Bytes $f.FullName
+    $allow = @()
+    if ($allowInBinary.ContainsKey($f.Name)) { $allow = $allowInBinary[$f.Name] }
+    foreach ($lit in $literals) {
+        if (-not $text.Contains($lit)) { continue }
+        if ($allow -contains $lit) {
+            Note ("allow-listed literal '{0}' in {1} (toolchain artefact)" -f $lit, $f.Name)
+            continue
+        }
+        Fail ("machine-specific literal '{0}' inside binary {1}" -f $lit, $f.Name)
+    }
+}
+Note ("binaries scanned: {0} file(s) over 1 MB" -f $binFiles.Count)
 
 # ---------------------------------------------------------------------------
 # Rule 4: the preference pool is not a file.
