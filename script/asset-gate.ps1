@@ -202,6 +202,62 @@ if ($dbFiles.Count -gt 0) {
 Note 'preference pool: no database present (pool rows live in the database, never on disk)'
 
 # ---------------------------------------------------------------------------
+# Rule 5: the template files must equal the reviewed baseline.
+#
+# Rules 1-4 describe what the templates may contain. This one pins *which* files they are: the
+# baseline under `templates/installer-assets` is the only copy that gets reviewed by hand, so a file
+# that differs from it means somebody edited the copy instead of the source of truth. That is
+# exactly the failure mode that shipped the author's own rules for five releases.
+# ---------------------------------------------------------------------------
+# Locate the baseline by walking up from this script until `templates/installer-assets` exists,
+# instead of counting `..` levels. Counting broke twice: the script sits one level deeper than the
+# repository root, so a fixed number of `Split-Path` calls silently pointed at a directory that does
+# not exist, and the check degraded into "baseline not present; skipping" - a protection that
+# reports success while enforcing nothing.
+$baseline = $null
+$probe = $PSScriptRoot
+for ($i = 0; $i -lt 5 -and $probe; $i++) {
+    $candidate = Join-Path $probe 'templates\installer-assets'
+    if (Test-Path $candidate) { $baseline = $candidate; break }
+    $probe = Split-Path -Parent $probe
+}
+if (-not $baseline) {
+    # A missing baseline is a hard failure: silently skipping equality is how a drifted copy would
+    # ship unnoticed.
+    Fail 'baseline templates/installer-assets not found; cannot verify the shipped templates'
+}
+else {
+    $seedPrefs = Join-Path $Root 'resources\seed\prefs'
+    $seedEx = Join-Path $Root 'resources\seed\ex-bags'
+    $pairs = @(
+        @{ Base = (Join-Path $baseline 'prefs'); Seed = $seedPrefs },
+        @{ Base = (Join-Path $baseline 'ex-bags'); Seed = $seedEx }
+    )
+    $drifted = 0
+    foreach ($pair in $pairs) {
+        if (-not (Test-Path $pair.Seed)) { Fail ("template subtree missing in package: {0}" -f $pair.Seed); continue }
+        $baseFiles = @(Get-ChildItem $pair.Base -Recurse -File -Force)
+        foreach ($bf in $baseFiles) {
+            $rel = $bf.FullName.Replace($pair.Base, '')
+            $sf = Join-Path $pair.Seed $rel
+            if (-not (Test-Path $sf)) { Fail ("template file missing from package: {0}" -f $rel); $drifted++; continue }
+            $hb = (Get-FileHash $bf.FullName -Algorithm SHA256).Hash
+            $hs = (Get-FileHash $sf -Algorithm SHA256).Hash
+            if ($hb -ne $hs) { Fail ("template file differs from baseline: {0}" -f $rel); $drifted++ }
+        }
+        $seedFiles = @(Get-ChildItem $pair.Seed -Recurse -File -Force)
+        foreach ($sf in $seedFiles) {
+            $rel = $sf.FullName.Replace($pair.Seed, '')
+            if (-not (Test-Path (Join-Path $pair.Base $rel))) {
+                Fail ("package carries a template file that is not in the baseline: {0}" -f $rel)
+                $drifted++
+            }
+        }
+    }
+    if ($drifted -eq 0) { Note 'templates identical to the reviewed baseline' }
+}
+
+# ---------------------------------------------------------------------------
 # Report
 # ---------------------------------------------------------------------------
 foreach ($n in $notes) { Write-Host ("  note: {0}" -f $n) }
