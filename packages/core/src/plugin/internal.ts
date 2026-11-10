@@ -75,6 +75,7 @@ import { GlobTool } from "../tool/plugin/glob.js"
 import { GrepTool } from "../tool/plugin/grep.js"
 import { McpResourceTools } from "../tool/plugin/mcp-resource.js"
 import { NoteTool } from "../tool/plugin/note.js"
+import { PreferenceTool } from "../tool/plugin/preference.js"
 import { OpenCodeTools } from "../tool/plugin/opencode.js"
 import { QuestionTool } from "../tool/plugin/question.js"
 import { ReadToolFileSystem } from "../tool/read-filesystem.js"
@@ -102,6 +103,7 @@ import { SkillPlugin } from "./skill.js"
 import { VcsHgPlugin } from "./vcs/hg.js"
 import { ToolInputRepairPlugin } from "./tool-input-repair.js"
 import { ContextBudgetPlugin } from "./context-budget.js"
+import { CompactionIndexPlugin } from "./compaction-index.js"
 import { OptimizePlugin } from "./optimize.js"
 import { VcsGitPlugin } from "./vcs/git.js"
 import { VerbosityPlugin } from "./verbosity.js"
@@ -254,6 +256,9 @@ const pre = [
   WebSearchTool.Plugin,
   WriteTool.Plugin,
   NoteTool.Plugin,
+  PreferenceTool.Plugin,
+  // Index compaction summaries into the note after the tools above are registered.
+  CompactionIndexPlugin.Plugin,
   WarmingPlugin.Plugin,
 ] as const satisfies readonly InternalPlugin[]
 

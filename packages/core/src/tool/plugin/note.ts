@@ -29,7 +29,7 @@ export const name = "note"
 /** Instruction entry key backing this session's note. */
 const NoteKey = InstructionEntry.Key.make("note")
 
-const MaxNoteBytes = 8 * 1024
+const MaxNoteBytes = 32 * 1024
 
 export const Input = Schema.Struct({
   action: Schema.Literals(["read", "write", "append", "clear"]).annotate({
@@ -197,7 +197,7 @@ export const Plugin = {
             "",
             "Also pass `refs` with the experience-document paths this task relies on (for example `SEC/接口可达性判定.md`). They are kept in a `## 参考` section inside the note, so every later request sees them without a search: open the path directly instead of running a retrieval pass and hoping for the right hit.",
             "",
-            "Do not use it for reusable method (that belongs in the experience tree), for task progress (that belongs in the handoff document), or for rules (that belongs in preferences). Keep it factual, deduplicated, and under 8 KB.",
+            "Do not use it for reusable method (that belongs in the experience tree), for task progress (that belongs in the handoff document), or for rules that apply to every session (those belong in the preference files). Keep it factual, deduplicated, and under 32 KB.",
           ].join("\n"),
           input: Input,
           output: Output,

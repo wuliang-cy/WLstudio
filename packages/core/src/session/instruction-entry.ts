@@ -68,6 +68,10 @@ export const initialize = Effect.fn("InstructionEntry.initialize")(function* (
 
 export interface Interface {
   readonly list: (sessionID: SessionSchema.ID) => Effect.Effect<ReadonlyArray<Info>>
+  /** Every stored row, including the ones hidden from rendering, for callers that flip visibility. */
+  readonly listAll: (sessionID: SessionSchema.ID) => Effect.Effect<
+    ReadonlyArray<{ key: Key; value: Schema.Json; removed: boolean }>
+  >
   readonly put: (input: {
     readonly sessionID: SessionSchema.ID
     readonly key: Key
@@ -131,6 +135,14 @@ const layer = Layer.effect(
       return (yield* rows(sessionID, false)).map((row) => ({ key: row.key, value: row.value }))
     })
 
+    const listAll = Effect.fn("InstructionEntry.listAll")(function* (sessionID: SessionSchema.ID) {
+      return (yield* rows(sessionID, true)).map((row) => ({
+        key: row.key,
+        value: row.value,
+        removed: row.removed,
+      }))
+    })
+
     const put = Effect.fn("InstructionEntry.put")(function* (input: Parameters<Interface["put"]>[0]) {
       const actualBytes = Buffer.byteLength(JSON.stringify(input.value), "utf8")
       if (actualBytes > MaxValueBytes)
@@ -156,9 +168,12 @@ const layer = Layer.effect(
     })
 
     const remove = Effect.fn("InstructionEntry.remove")(function* (input: Parameters<Interface["remove"]>[0]) {
+      // Keep `value` in place. `load()` reads every row, removed ones included, and hands each to
+      // a codec that only accepts JSON; a nulled value makes that encode fail, which takes down the
+      // whole session drain. The `removed` flag alone is what suppresses the value from rendering.
       yield* db
         .update(InstructionEntryTable)
-        .set({ value: null, removed: true, time_updated: Date.now() })
+        .set({ removed: true, time_updated: Date.now() })
         .where(
           and(
             eq(InstructionEntryTable.session_id, input.sessionID),
@@ -171,10 +186,15 @@ const layer = Layer.effect(
     })
 
     const load = Effect.fn("InstructionEntry.load")(function* (sessionID: SessionSchema.ID) {
-      return Instructions.combine((yield* rows(sessionID, true)).map(source))
+      // A row whose value is missing cannot be handed to the codec, so leave it out entirely rather
+      // than failing the request that every turn depends on. `remove()` preserves the value now, so
+      // this only guards rows written by older builds.
+      return Instructions.combine(
+        (yield* rows(sessionID, true)).filter((row) => row.value !== null).map(source),
+      )
     })
 
-    return Service.of({ list, put, remove, load })
+    return Service.of({ list, listAll, put, remove, load })
   }),
 )
 
